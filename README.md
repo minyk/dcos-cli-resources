@@ -7,9 +7,42 @@ DC/OS CLI Subcommand for mesos resource reserve/unreserve
 
 ## resources
 
-### reserve
+```
+$ dcos resources
 
-### unreserve
+usage: dcos resources [<flags>] <command>
+
+
+Flags:
+  -h, --help              Show context-sensitive help.
+  -v, --verbose           Enable extra logging of requests/responses
+      --name="resources"  Name of the service instance to query
+
+Commands:
+  help [<command> ...]
+    Show help.
+
+
+  reserve --agent-id=AGENT-ID --role=ROLE [<flags>]
+    Reserve resources
+
+    --agent-id=AGENT-ID         Agent ID to reserve
+    --role=ROLE                 Role for reserve
+    --principal="my-principal"  Principal for reserve.
+    --cpus=0                    Amount of cpus to reserve
+    --mem=0                     Amount of memory to reserve
+
+
+  unreserve --agent-id=AGENT-ID --role=ROLE [<flags>]
+    Reserve resources
+
+    --agent-id=AGENT-ID         Agent ID to unreserve
+    --role=ROLE                 Role for unreserve
+    --principal="my-principal"  Principal for unreserve.
+    --cpus=0                    Amount of cpus to unreserve
+    --mem=0                     Amount of memory to unreserve
+
+```
 
 ### Examples
 
