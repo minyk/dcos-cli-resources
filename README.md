@@ -28,19 +28,19 @@ Commands:
 
     --agent-id=AGENT-ID         Agent ID to reserve
     --role=ROLE                 Role for reserve
-    --principal="my-principal"  Principal for reserve.
+    --principal="my-principal"  Principal for reserve
     --cpus=0                    Amount of cpus to reserve
-    --mem=0                     Amount of memory to reserve
+    --mem=0                     Amount of memory to reserve. The unit is MB.
 
 
   unreserve --agent-id=AGENT-ID --role=ROLE [<flags>]
-    Reserve resources
+    Unreserve resources
 
     --agent-id=AGENT-ID         Agent ID to unreserve
     --role=ROLE                 Role for unreserve
     --principal="my-principal"  Principal for unreserve.
     --cpus=0                    Amount of cpus to unreserve
-    --mem=0                     Amount of memory to unreserve
+    --mem=0                     Amount of memory to unreserve. The unit is MB.
 
 ```
 
