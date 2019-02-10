@@ -1,0 +1,7 @@
+schema_version = 1
+name = "resources"
+
+[[commands]]
+name = "resources"
+path = "bin/dcos-resources"
+description = "Mesos Resources Subcommand"
