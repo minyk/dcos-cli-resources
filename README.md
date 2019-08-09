@@ -40,7 +40,9 @@ Commands:
     --role=ROLE                 Role for unreserve
     --principal="my-principal"  Principal for unreserve.
     --cpus=0                    Amount of cpus to unreserve
+    --cpus-resource-id=""       Resource id for unreserve action.
     --mem=0                     Amount of memory to unreserve. The unit is MB.
+    --mem-resource-id=""        Resource id for unreserve action.
 
 ```
 
@@ -56,7 +58,7 @@ $ dcos resources reserve --agent-id="AAA-BBB-CCCC" --role="role1" --cpus=1 --mem
 * unreserve
 
 ```sh
-$ dcos resources unreserve --agent-id="AAA-BBB-CCCC" --role="role1" --cpus=1 --mem=1024
+$ dcos resources unreserve --agent-id="AAA-BBB-CCCC" --role="role1" --cpus=1 --cpus-resource-id="xxxx" --mem=1024 --mem-resource-id="yyyy"
 ```
 
 # How to
