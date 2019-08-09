@@ -11,8 +11,9 @@ type resourcesHandler struct {
 	role      string
 	principal string
 	cpus      float64
+	cpuLabel  string
 	mem       float64
-
+	memLabel  string
 }
 
 func (cmd *resourcesHandler) handleReserve(a *kingpin.Application, e *kingpin.ParseElement, c *kingpin.ParseContext) error {
@@ -20,7 +21,7 @@ func (cmd *resourcesHandler) handleReserve(a *kingpin.Application, e *kingpin.Pa
 }
 
 func (cmd *resourcesHandler) handleUnreserve(a *kingpin.Application, e *kingpin.ParseElement, c *kingpin.ParseContext) error {
-	return cmd.q.UnreserveResource(cmd.agentID, cmd.role, cmd.principal, cmd.cpus, cmd.mem)
+	return cmd.q.UnreserveResource(cmd.agentID, cmd.role, cmd.principal, cmd.cpus, cmd.cpuLabel, cmd.mem, cmd.memLabel)
 }
 
 // HandleScheduleSection
@@ -48,5 +49,7 @@ func HandleUnreserveResourcesCommands(resources *kingpin.CmdClause, q *queries.R
 	unReserve.Flag("role", "Role for unreserve").Required().StringVar(&cmd.role)
 	unReserve.Flag("principal", "Principal for unreserve.").Default("my-principal").StringVar(&cmd.principal)
 	unReserve.Flag("cpus", "Amount of cpus to unreserve").Default("0").Float64Var(&cmd.cpus)
+	unReserve.Flag("cpus-resource-id", "Resource id for unreserve action.").Default("").StringVar(&cmd.cpuLabel)
 	unReserve.Flag("mem", "Amount of memory to unreserve. The unit is MB.").Default("0").Float64Var(&cmd.mem)
+	unReserve.Flag("mem-resource-id", "Resource id for unreserve action.").Default("").StringVar(&cmd.memLabel)
 }
