@@ -133,17 +133,17 @@ func CreateServiceHTTPJSONRequest(method, urlPath string, jsonPayload []byte) *h
 
 // CreateServiceHTTPDataRequest creates a service HTTP data request
 func CreateServiceHTTPDataRequest(method, urlPath string, jsonPayload []byte, contentType string) *http.Request {
-	return CreateHTTPRawRequest(method, CreateMesosURL(), jsonPayload, "", contentType)
+	return CreateHTTPRawRequest(method, CreateMesosURL(urlPath), jsonPayload, "", contentType)
 }
 
 // CreateServiceHTTPQueryRequest creates a service HTTP query request
 func CreateServiceHTTPQueryRequest(method, urlPath, urlQuery string) *http.Request {
-	return CreateHTTPRawRequest(method, CreateMesosURL(), nil, "", "")
+	return CreateHTTPRawRequest(method, CreateMesosURL(urlPath), nil, "", "")
 }
 
 // CreateServiceHTTPRequest creates a service HTTP request
 func CreateServiceHTTPRequest(method, urlPath string) *http.Request {
-	return CreateHTTPRawRequest(method, CreateMesosURL(), nil, "", "")
+	return CreateHTTPRawRequest(method, CreateMesosURL(urlPath), nil, "", "")
 }
 
 // CreateHTTPRawRequest creates an HTTP request
@@ -162,8 +162,8 @@ func GetDCOSURL() string {
 }
 
 // CreateMesosURL creates a service URL of the form http://clusterurl.com/mesos/api/v1
-func CreateMesosURL() *url.URL {
-	return CreateURL(GetDCOSURL(), "/mesos/api/v1", "")
+func CreateMesosURL(path string) *url.URL {
+	return CreateURL(GetDCOSURL(), "/mesos"+path, "")
 }
 
 //// CreateServiceURL creates a service URL of the form http://clusterurl.com/service/<servicename>/<urlPath>[?urlQuery]
