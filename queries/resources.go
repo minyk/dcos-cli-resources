@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"github.com/mesos/mesos-go/api/v1/lib"
 	"github.com/mesos/mesos-go/api/v1/lib/master"
-	"github.com/minyk/dcos-resources/client"
+	"github.com/minyk/dcos-cli-resources/client"
 )
 
 type Resources struct {
@@ -24,7 +24,7 @@ func (q *Resources) ReserveResource(agentid string, role string, principal strin
 	body := master.Call{
 		Type: master.Call_RESERVE_RESOURCES,
 		ReserveResources: &master.Call_ReserveResources{
-			AgentID: mesos.AgentID{Value: agentid},
+			AgentID:   mesos.AgentID{Value: agentid},
 			Resources: resources,
 		},
 	}
@@ -53,7 +53,7 @@ func (q *Resources) UnreserveResource(agentid string, role string, principal str
 	body := master.Call{
 		Type: master.Call_UNRESERVE_RESOURCES,
 		ReserveResources: &master.Call_ReserveResources{
-			AgentID: mesos.AgentID{Value: agentid},
+			AgentID:   mesos.AgentID{Value: agentid},
 			Resources: resources,
 		},
 	}
@@ -90,10 +90,10 @@ func resource(resourceType string, role string, principal string, cpus float64) 
 	}
 
 	return mesos.Resource{
-		Type: &scala,
-		Name: resourceType,
-		Role: &role,
+		Type:        &scala,
+		Name:        resourceType,
+		Role:        &role,
 		Reservation: &reservation,
-		Scalar: &mesos.Value_Scalar{Value:cpus},
+		Scalar:      &mesos.Value_Scalar{Value: cpus},
 	}
 }

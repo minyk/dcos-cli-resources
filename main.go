@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/minyk/dcos-resources/cli"
+	"github.com/minyk/dcos-cli-resources/cli"
 	"gopkg.in/alecthomas/kingpin.v3-unstable"
 )
 

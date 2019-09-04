@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"github.com/minyk/dcos-resources/queries"
+	"github.com/minyk/dcos-cli-resources/queries"
 	"gopkg.in/alecthomas/kingpin.v3-unstable"
 )
 
@@ -12,7 +12,6 @@ type resourcesHandler struct {
 	principal string
 	cpus      float64
 	mem       float64
-
 }
 
 func (cmd *resourcesHandler) handleReserve(a *kingpin.Application, e *kingpin.ParseElement, c *kingpin.ParseContext) error {

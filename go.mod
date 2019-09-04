@@ -1,4 +1,4 @@
-module github.com/minyk/dcos-resources
+module github.com/minyk/dcos-cli-resources
 
 require (
 	github.com/BurntSushi/toml v0.3.1

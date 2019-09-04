@@ -7,9 +7,9 @@ package cli
 import (
 	"fmt"
 	"github.com/mesosphere/dcos-commons/cli/config"
-	"github.com/minyk/dcos-resources/client"
-	"github.com/minyk/dcos-resources/commands"
-	"github.com/minyk/dcos-resources/queries"
+	"github.com/minyk/dcos-cli-resources/client"
+	"github.com/minyk/dcos-cli-resources/commands"
+	"github.com/minyk/dcos-cli-resources/queries"
 	"gopkg.in/alecthomas/kingpin.v3-unstable"
 	"os"
 	"strings"
