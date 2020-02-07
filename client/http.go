@@ -163,7 +163,7 @@ func GetDCOSURL() string {
 
 // CreateMesosURL creates a service URL of the form http://clusterurl.com/mesos/api/v1
 func CreateMesosURL(path string) *url.URL {
-	return CreateURL(GetDCOSURL(), "/mesos"+path, "")
+	return CreateURL(GetDCOSURL(), path, "")
 }
 
 //// CreateServiceURL creates a service URL of the form http://clusterurl.com/service/<servicename>/<urlPath>[?urlQuery]

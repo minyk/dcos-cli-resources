@@ -37,12 +37,17 @@ func (cmd *resourcesHandler) handleDestroyPersistVolume(a *kingpin.Application, 
 	return cmd.q.DestroyVolume(cmd.agentID, cmd.role, cmd.principal, cmd.disk, cmd.diskLabel, cmd.persistid, cmd.containerpath, cmd.hostpath)
 }
 
+func (cmd *resourcesHandler) handleListResources(a *kingpin.Application, e *kingpin.ParseElement, c *kingpin.ParseContext) error {
+	return cmd.q.ListResourcesFromNode(cmd.agentID, cmd.role)
+}
+
 // HandleScheduleSection
 func HandleResourcesSection(app *kingpin.Application, q *queries.Resources) {
 	HandleReserveResourcesCommands(app.Command("reserve", "Reserve resources").Alias("reserves"), q)
 	HandleUnreserveResourcesCommands(app.Command("unreserve", "Unreserve resources").Alias("unreserves"), q)
 	HandleUnreserveResourcesAllCommands(app.Command("unreserve-all", "Unreserve all resources").Alias("unreservesall"), q)
 	HandleDestroyPersistVolume(app.Command("destroy-persist-volume", "Destroy persistence volume").Alias("destroyvolume"), q)
+	HandleListResourcesCommands(app.Command("list-resources", "List reserved resources from agent").Alias("listresources"), q)
 }
 
 // HandleScheduleCommand
@@ -91,4 +96,11 @@ func HandleDestroyPersistVolume(resources *kingpin.CmdClause, q *queries.Resourc
 	destroyPersistVolume.Flag("disk-persist-id", "Persistence id for unreserve action.").Default("").StringVar(&cmd.persistid)
 	destroyPersistVolume.Flag("container-path", "Container path of disk.").Default("").StringVar(&cmd.containerpath)
 	destroyPersistVolume.Flag("host-path", "host path of disk.").Default("").StringVar(&cmd.hostpath)
+}
+
+func HandleListResourcesCommands(resources *kingpin.CmdClause, q *queries.Resources) {
+	cmd := &resourcesHandler{q: q}
+	listResources := resources.Action(cmd.handleListResources)
+	listResources.Flag("agent-id", "Agent ID to unreserve").Required().StringVar(&cmd.agentID)
+	listResources.Flag("role", "Role for unreserve").Required().StringVar(&cmd.role)
 }

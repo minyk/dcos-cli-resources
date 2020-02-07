@@ -9,11 +9,15 @@ import (
 )
 
 type Resources struct {
-	PrefixCb func() string
+	PrefixMesosMasterApiV1 func() string
+	PrefixMesosSlaveApiV0  func(string) string
 }
 
 func NewResources() *Resources {
-	return &Resources{}
+	return &Resources{
+		PrefixMesosMasterApiV1: func() string { return "/mesos/api/v1/" },
+		PrefixMesosSlaveApiV0:  func(agentid string) string { return "/agent/" + agentid },
+	}
 }
 
 func (q *Resources) ReserveResource(agentid string, role string, principal string, cpus float64, mem float64) error {
@@ -35,7 +39,7 @@ func (q *Resources) ReserveResource(agentid string, role string, principal strin
 		return err
 	}
 
-	_, err = client.HTTPServicePostJSON("/api/v1", requestContent)
+	_, err = client.HTTPServicePostJSON(q.PrefixMesosMasterApiV1(), requestContent)
 	if err != nil {
 		return err
 	} else {
@@ -71,7 +75,7 @@ func (q *Resources) UnreserveResource(agentid string, role string, principal str
 		return err
 	}
 
-	_, err = client.HTTPServicePostJSON("/api/v1", requestContent)
+	_, err = client.HTTPServicePostJSON(q.PrefixMesosMasterApiV1(), requestContent)
 	if err != nil {
 		return err
 	} else {
@@ -97,7 +101,7 @@ func (q *Resources) DestroyVolume(agentid string, role string, principal string,
 	}
 
 	requestContent, err := json.Marshal(request_body)
-	_, err = client.HTTPServicePostJSON("/api/v1", requestContent)
+	_, err = client.HTTPServicePostJSON(q.PrefixMesosMasterApiV1(), requestContent)
 	if err != nil {
 		return err
 	} else {
@@ -114,7 +118,7 @@ func (q *Resources) UnreserveResourceAll(agentid string, role string, principal 
 		Type: agent.Call_GET_STATE,
 	}
 	requestContent, err := json.Marshal(state_body)
-	response, err := client.HTTPServicePostJSON("/api/v1", requestContent)
+	response, err := client.HTTPServicePostJSON(q.PrefixMesosMasterApiV1(), requestContent)
 	if err != nil {
 		return err
 	}
@@ -146,7 +150,7 @@ func (q *Resources) UnreserveResourceAll(agentid string, role string, principal 
 		return err
 	}
 
-	_, err = client.HTTPServicePostJSON("/api/v1", requestContent)
+	_, err = client.HTTPServicePostJSON(q.PrefixMesosMasterApiV1(), requestContent)
 	if err != nil {
 		return err
 	} else {
@@ -250,4 +254,81 @@ func resourceDiskWithLabel(role string, principal string, disk float64, resource
 		Scalar:      &mesos.Value_Scalar{Value: disk},
 		Disk:        &diskinfo,
 	}
+}
+
+func (q *Resources) ListResourcesFromNode(agentid string, role string) error {
+
+	response, err := client.HTTPServiceGet(q.PrefixMesosSlaveApiV0(agentid) + "/state")
+	if err != nil {
+		return err
+	}
+
+	agentStateReponse := AgentState{}
+	json.Unmarshal(response, &agentStateReponse)
+
+	resources := agentStateReponse.AgentReservedResourcesFull[role]
+	if len(resources) == 0 {
+		client.PrintMessage("No resources are reserved for %s", role)
+		return nil
+	}
+
+	client.PrintMessage("Role\t\tPrincipal\t\tName\t\tValue\t\tID\t\tPersistentID\t\tContainerPath")
+	for i := range resources {
+		resource := resources[i]
+
+		if resource.Name == "disk" {
+			client.PrintMessage("%s\t\t%s\t\t%s\t\t%f\t\t%s\t\t%s\t\t%s", resource.Role, resource.Reservation.Principal, resource.Name, resource.Scalar, resource.Reservation.Labels.Labels[0].Value, resource.Disk.Persistence.ID, resource.Disk.Volume.ContainerPath)
+		} else {
+			client.PrintMessage("%s\t\t%s\t\t%s\t\t%f\t\t%s", resource.Role, resource.Reservation.Principal, resource.Name, resource.Scalar, resource.Reservation.Labels.Labels[0].Value)
+		}
+	}
+
+	return nil
+}
+
+type AgentState struct {
+	AgentReservedResourcesFull ReservedResourcesFull `json:"reserved_resources_full,omitempty"`
+}
+
+type ReservedResourcesFull map[string]ResourceRole
+
+type ResourceRole []Resource
+
+type Resource struct {
+	Name   string `json:"name,omitempty"`
+	Type   string `json:"type,omitempty"`
+	Scalar struct {
+		Value float64 `json:"value"`
+	} `json:"scalar,omitempty"`
+	Role        string `json:"role,omitempty"`
+	Reservation struct {
+		Principal string `json:"principal"`
+		Labels    struct {
+			Labels []struct {
+				Key   string `json:"key"`
+				Value string `json:"value"`
+			} `json:"labels"`
+		} `json:"labels"`
+	} `json:"reservation,omitempty"`
+	Reservations []struct {
+		Type      string `json:"type"`
+		Role      string `json:"role"`
+		Principal string `json:"principal"`
+		Labels    struct {
+			Labels []struct {
+				Key   string `json:"key"`
+				Value string `json:"value"`
+			} `json:"labels"`
+		} `json:"labels"`
+	} `json:"reservations,omitempty"`
+	Disk struct {
+		Persistence struct {
+			ID        string `json:"id"`
+			Principal string `json:"principal"`
+		} `json:"persistence"`
+		Volume struct {
+			Mode          string `json:"mode"`
+			ContainerPath string `json:"container_path"`
+		} `json:"volume"`
+	} `json:"disk,omitempty"`
 }
