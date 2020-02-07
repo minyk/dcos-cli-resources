@@ -61,6 +61,17 @@ $ dcos resources reserve --agent-id="AAA-BBB-CCCC" --role="role1" --cpus=1 --mem
 $ dcos resources unreserve --agent-id="AAA-BBB-CCCC" --role="role1" --cpus=1 --cpus-resource-id="xxxx" --mem=1024 --mem-resource-id="yyyy"
 ```
 
+* list resources
+
+```sh
+$ dcos resources list-resources --agent-id="ef71ac72-3f3e-4bd8-904a-4db098706e06-S0" --role="ccdb-role"
+Role		Principal		Name		Value		ID		PersistentID		ContainerPath
+ccdb-role		/ccdb-principal		disk		{5000.000000}		bf6c0a6f-32d5-4ce8-af67-b797c2b2437a		d70914c6-3714-41f0-9532-cd54fd1441d2		cockroach-data
+ccdb-role		/ccdb-principal		cpus		{0.100000}		6eccfee1-44bc-42de-92e4-290ee5686394
+ccdb-role		/ccdb-principal		mem		{32.000000}		864f5c23-c54f-4608-bdb9-7aec0df3b63f
+ccdb-role		/ccdb-principal		disk		{256.000000}		dbb5a068-8bcf-4c15-a1bf-c0795f79d74c
+```
+
 # How to
 
 ## Build
