@@ -2,8 +2,8 @@ package queries
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/mesos/mesos-go/api/v1/lib"
-	"github.com/mesos/mesos-go/api/v1/lib/agent"
 	"github.com/mesos/mesos-go/api/v1/lib/master"
 	"github.com/minyk/dcos-resources/client"
 )
@@ -111,31 +111,10 @@ func (q *Resources) DestroyVolume(agentid string, role string, principal string,
 	return nil
 }
 
-func (q *Resources) UnreserveResourceAll(agentid string, role string, principal string) error {
+func (q *Resources) UnreserveOneResource(agentid string, role string, principal string, resourceType string, resourceValue float64, resourceLabel string) error {
 
-	// query current state from agent
-	state_body := agent.Call{
-		Type: agent.Call_GET_STATE,
-	}
-	requestContent, err := json.Marshal(state_body)
-	response, err := client.HTTPServicePostJSON(q.PrefixMesosMasterApiV1(), requestContent)
-	if err != nil {
-		return err
-	}
-
-	agentStateReponse := master.Response{}
-	json.Unmarshal(response, &agentStateReponse)
-
-	// TODO find all resources with role and principal
-	cpus := float64(4)
-	cpus_resource_id := ""
-	mem := float64(4)
-	mem_resource_id := ""
-
-	// unreserve cpus, mem resources with resource_id
 	resources := []mesos.Resource{}
-	resources = append(resources, resourceWithLabel("cpus", role, principal, cpus, cpus_resource_id))
-	resources = append(resources, resourceWithLabel("mem", role, principal, mem, mem_resource_id))
+	resources = append(resources, resourceWithLabel(resourceType, role, principal, resourceValue, resourceLabel))
 
 	body := master.Call{
 		Type: master.Call_UNRESERVE_RESOURCES,
@@ -145,7 +124,7 @@ func (q *Resources) UnreserveResourceAll(agentid string, role string, principal 
 		},
 	}
 
-	requestContent, err = json.Marshal(body)
+	requestContent, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
@@ -155,6 +134,41 @@ func (q *Resources) UnreserveResourceAll(agentid string, role string, principal 
 		return err
 	} else {
 		client.PrintMessage("Unreservation is successful.")
+	}
+
+	return nil
+
+}
+
+func (q *Resources) UnreserveResourceAll(agentid string, role string) error {
+
+	client.PrintMessage("Unreserve all resources for %s", role)
+
+	resources, err := getResourcesOnRole(q.PrefixMesosSlaveApiV0(agentid), role)
+	if err != nil {
+		return err
+	}
+
+	// first, trying to destroy persistent volume
+	for _, r := range resources {
+		if r.Name == "disk" && r.Disk.Persistence.ID != "" {
+			client.PrintMessage("Destroying persistent volumes: %s", r.Reservation.Labels.Labels[0].Value)
+			err = q.DestroyVolume(agentid, role, r.Reservation.Principal, r.Scalar.Value, r.Reservation.Labels.Labels[0].Value, r.Disk.Persistence.ID, r.Disk.Volume.ContainerPath, "")
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, r := range resources {
+		// TODO we should handle ports resource.
+		if r.Name != "ports" {
+			client.PrintMessage("unreserve resouce: %s", r.Reservation.Labels.Labels[0].Value)
+			err = q.UnreserveOneResource(agentid, role, r.Reservation.Principal, r.Name, r.Scalar.Value, r.Reservation.Labels.Labels[0].Value)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -258,18 +272,9 @@ func resourceDiskWithLabel(role string, principal string, disk float64, resource
 
 func (q *Resources) ListResourcesFromNode(agentid string, role string) error {
 
-	response, err := client.HTTPServiceGet(q.PrefixMesosSlaveApiV0(agentid) + "/state")
+	resources, err := getResourcesOnRole(q.PrefixMesosSlaveApiV0(agentid), role)
 	if err != nil {
 		return err
-	}
-
-	agentStateReponse := AgentState{}
-	json.Unmarshal(response, &agentStateReponse)
-
-	resources := agentStateReponse.AgentReservedResourcesFull[role]
-	if len(resources) == 0 {
-		client.PrintMessage("No resources are reserved for %s", role)
-		return nil
 	}
 
 	client.PrintMessage("Role\t\tPrincipal\t\tName\t\tValue\t\tID\t\tPersistentID\t\tContainerPath")
@@ -286,49 +291,27 @@ func (q *Resources) ListResourcesFromNode(agentid string, role string) error {
 	return nil
 }
 
-type AgentState struct {
-	AgentReservedResourcesFull ReservedResourcesFull `json:"reserved_resources_full,omitempty"`
+func getResourcesOnRole(urlPath string, role string) (ResourceRole, error) {
+	resourcesFull, err := listResources(urlPath)
+	if err != nil {
+		return nil, err
+	}
+
+	resources := resourcesFull[role]
+	if len(resources) == 0 {
+		return nil, errors.New("no resources are reserved for role")
+	}
+
+	return resources, nil
 }
 
-type ReservedResourcesFull map[string]ResourceRole
+func listResources(urlPath string) (ReservedResourcesFull, error) {
+	response, err := client.HTTPServiceGet(urlPath + "/state")
+	if err != nil {
+		return nil, err
+	}
 
-type ResourceRole []Resource
-
-type Resource struct {
-	Name   string `json:"name,omitempty"`
-	Type   string `json:"type,omitempty"`
-	Scalar struct {
-		Value float64 `json:"value"`
-	} `json:"scalar,omitempty"`
-	Role        string `json:"role,omitempty"`
-	Reservation struct {
-		Principal string `json:"principal"`
-		Labels    struct {
-			Labels []struct {
-				Key   string `json:"key"`
-				Value string `json:"value"`
-			} `json:"labels"`
-		} `json:"labels"`
-	} `json:"reservation,omitempty"`
-	Reservations []struct {
-		Type      string `json:"type"`
-		Role      string `json:"role"`
-		Principal string `json:"principal"`
-		Labels    struct {
-			Labels []struct {
-				Key   string `json:"key"`
-				Value string `json:"value"`
-			} `json:"labels"`
-		} `json:"labels"`
-	} `json:"reservations,omitempty"`
-	Disk struct {
-		Persistence struct {
-			ID        string `json:"id"`
-			Principal string `json:"principal"`
-		} `json:"persistence"`
-		Volume struct {
-			Mode          string `json:"mode"`
-			ContainerPath string `json:"container_path"`
-		} `json:"volume"`
-	} `json:"disk,omitempty"`
+	agentStateReponse := AgentState{}
+	json.Unmarshal(response, &agentStateReponse)
+	return agentStateReponse.AgentReservedResourcesFull, nil
 }

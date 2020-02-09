@@ -1,46 +1,55 @@
 package queries
 
-import (
-	"bufio"
-	"encoding/csv"
-	"github.com/mesos/mesos-go/api/v1/lib"
-	"os"
-)
-
 func check(e error) {
 	if e != nil {
 		panic(e)
 	}
 }
 
-func toMachineIDs(filename string) []mesos.MachineID {
-	f, err := os.Open(filename)
-	check(err)
-
-	rdr := csv.NewReader(bufio.NewReader(f))
-	rdr.Comment = '#'
-	lists, err := rdr.ReadAll()
-	check(err)
-
-	var mids []mesos.MachineID
-
-	for _, line := range lists {
-		mid := mesos.MachineID{
-			IP:       &line[1],
-			Hostname: &line[0],
-		}
-		mids = append(mids, mid)
-	}
-
-	return mids
+// Struct for Mesos API V0
+type AgentState struct {
+	AgentReservedResourcesFull ReservedResourcesFull `json:"reserved_resources_full,omitempty"`
 }
 
-func containMID(s []mesos.MachineID, e mesos.MachineID) bool {
+type ReservedResourcesFull map[string]ResourceRole
 
-	for _, a := range s {
-		if a.Equal(e) {
-			return true
-		}
-	}
-	return false
+type ResourceRole []Resource
+
+type Resource struct {
+	Name   string `json:"name,omitempty"`
+	Type   string `json:"type,omitempty"`
+	Scalar struct {
+		Value float64 `json:"value"`
+	} `json:"scalar,omitempty"`
+	Role        string `json:"role,omitempty"`
+	Reservation struct {
+		Principal string `json:"principal"`
+		Labels    struct {
+			Labels []struct {
+				Key   string `json:"key"`
+				Value string `json:"value"`
+			} `json:"labels"`
+		} `json:"labels"`
+	} `json:"reservation,omitempty"`
+	Reservations []struct {
+		Type      string `json:"type"`
+		Role      string `json:"role"`
+		Principal string `json:"principal"`
+		Labels    struct {
+			Labels []struct {
+				Key   string `json:"key"`
+				Value string `json:"value"`
+			} `json:"labels"`
+		} `json:"labels"`
+	} `json:"reservations,omitempty"`
+	Disk struct {
+		Persistence struct {
+			ID        string `json:"id"`
+			Principal string `json:"principal"`
+		} `json:"persistence"`
+		Volume struct {
+			Mode          string `json:"mode"`
+			ContainerPath string `json:"container_path"`
+		} `json:"volume"`
+	} `json:"disk,omitempty"`
 }

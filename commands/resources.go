@@ -30,7 +30,7 @@ func (cmd *resourcesHandler) handleUnreserve(a *kingpin.Application, e *kingpin.
 }
 
 func (cmd *resourcesHandler) handleUnreserveAll(a *kingpin.Application, e *kingpin.ParseElement, c *kingpin.ParseContext) error {
-	return cmd.q.UnreserveResourceAll(cmd.agentID, cmd.role, cmd.principal)
+	return cmd.q.UnreserveResourceAll(cmd.agentID, cmd.role)
 }
 
 func (cmd *resourcesHandler) handleDestroyPersistVolume(a *kingpin.Application, e *kingpin.ParseElement, c *kingpin.ParseContext) error {
@@ -79,10 +79,9 @@ func HandleUnreserveResourcesCommands(resources *kingpin.CmdClause, q *queries.R
 // Unreserve all resources with role and principal
 func HandleUnreserveResourcesAllCommands(resources *kingpin.CmdClause, q *queries.Resources) {
 	cmd := &resourcesHandler{q: q}
-	unReserve := resources.Action(cmd.handleUnreserve)
+	unReserve := resources.Action(cmd.handleUnreserveAll)
 	unReserve.Flag("agent-id", "Agent ID to unreserve").Required().StringVar(&cmd.agentID)
 	unReserve.Flag("role", "Role for unreserve").Required().StringVar(&cmd.role)
-	unReserve.Flag("principal", "Principal for unreserve.").Default("my-principal").StringVar(&cmd.principal)
 }
 
 func HandleDestroyPersistVolume(resources *kingpin.CmdClause, q *queries.Resources) {
