@@ -151,9 +151,10 @@ func (q *Resources) UnreserveResourceAll(agentid string, role string) error {
 
 	// first, trying to destroy persistent volume
 	for _, r := range resources {
-		if r.Name == "disk" && r.Disk.Persistence.ID != "" {
-			client.PrintMessage("Destroying persistent volumes: %s", r.Reservation.Labels.Labels[0].Value)
-			err = q.DestroyVolume(agentid, role, r.Reservation.Principal, r.Scalar.Value, r.Reservation.Labels.Labels[0].Value, r.Disk.Persistence.ID, r.Disk.Volume.ContainerPath, "")
+		if r.GetName() == "disk" && r.GetDisk().GetPersistence().GetID() != "" {
+			rid := getResourceIDFromLabels(r.GetReservation().GetLabels().GetLabels())
+			client.PrintMessage("Destroying persistent volumes: %s", rid)
+			err = q.DestroyVolume(agentid, role, r.GetReservation().GetPrincipal(), r.GetScalar().GetValue(), rid, r.GetDisk().GetPersistence().GetID(), r.GetDisk().GetVolume().GetContainerPath(), "")
 			if err != nil {
 				return err
 			}
@@ -162,9 +163,10 @@ func (q *Resources) UnreserveResourceAll(agentid string, role string) error {
 
 	for _, r := range resources {
 		// TODO we should handle ports resource.
-		if r.Name != "ports" {
-			client.PrintMessage("unreserve resouce: %s", r.Reservation.Labels.Labels[0].Value)
-			err = q.UnreserveOneResource(agentid, role, r.Reservation.Principal, r.Name, r.Scalar.Value, r.Reservation.Labels.Labels[0].Value)
+		if r.GetName() != "ports" {
+			rid := getResourceIDFromLabels(r.GetReservation().GetLabels().GetLabels())
+			client.PrintMessage("unreserve resouce: %s", rid)
+			err = q.UnreserveOneResource(agentid, role, r.GetReservation().GetPrincipal(), r.GetName(), r.GetScalar().GetValue(), rid)
 			if err != nil {
 				return err
 			}
@@ -280,15 +282,27 @@ func (q *Resources) ListResourcesFromNode(agentid string, role string) error {
 	client.PrintMessage("Role\t\tPrincipal\t\tName\t\tValue\t\tID\t\tPersistentID\t\tContainerPath")
 	for i := range resources {
 		resource := resources[i]
-
-		if resource.Name == "disk" {
-			client.PrintMessage("%s\t\t%s\t\t%s\t\t%f\t\t%s\t\t%s\t\t%s", resource.Role, resource.Reservation.Principal, resource.Name, resource.Scalar, resource.Reservation.Labels.Labels[0].Value, resource.Disk.Persistence.ID, resource.Disk.Volume.ContainerPath)
+		rid := getResourceIDFromLabels(resource.GetReservation().GetLabels().GetLabels())
+		if resource.GetName() == "disk" {
+			client.PrintMessage("%s\t\t%s\t\t%s\t\t%f\t\t%s\t\t%s\t\t%s", resource.GetRole(), resource.GetReservation().GetPrincipal(), resource.GetName(), resource.GetScalar().GetValue(), rid, resource.GetDisk().GetPersistence().GetID(), resource.GetDisk().GetVolume().GetContainerPath())
+		} else if resource.GetName() == "ports" {
+			client.PrintMessage("%s\t\t%s\t\t%s\t\t%f\t\t%s", resource.GetRole(), resource.GetReservation().GetPrincipal(), resource.GetName(), resource.GetRanges().GoString(), rid)
 		} else {
-			client.PrintMessage("%s\t\t%s\t\t%s\t\t%f\t\t%s", resource.Role, resource.Reservation.Principal, resource.Name, resource.Scalar, resource.Reservation.Labels.Labels[0].Value)
+			client.PrintMessage("%s\t\t%s\t\t%s\t\t%f\t\t%s", resource.GetRole(), resource.GetReservation().GetPrincipal(), resource.GetName(), resource.GetScalar().GetValue(), rid)
 		}
 	}
 
 	return nil
+}
+
+func getResourceIDFromLabels(labels []mesos.Label) string {
+	var rid = ""
+	for _, value := range labels {
+		if value.Key == "resource_id" {
+			rid = *value.Value
+		}
+	}
+	return rid
 }
 
 func getResourcesOnRole(urlPath string, role string) (ResourceRole, error) {
@@ -312,6 +326,14 @@ func listResources(urlPath string) (ReservedResourcesFull, error) {
 	}
 
 	agentStateReponse := AgentState{}
-	json.Unmarshal(response, &agentStateReponse)
+	err = json.Unmarshal(response, &agentStateReponse)
+	if err != nil {
+		return nil, err
+	}
+
+	for index := range agentStateReponse.AgentReservedResourcesFull {
+		client.PrintVerbose("index: %s", index)
+	}
+
 	return agentStateReponse.AgentReservedResourcesFull, nil
 }
