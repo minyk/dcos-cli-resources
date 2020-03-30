@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/mesos/mesos-go/api/v1/lib"
+	"github.com/mesos/mesos-go/api/v1/lib/agent"
+	agentcalls "github.com/mesos/mesos-go/api/v1/lib/agent/calls"
 	"github.com/mesos/mesos-go/api/v1/lib/master"
 	"github.com/minyk/dcos-resources/client"
 )
@@ -11,12 +13,14 @@ import (
 type Resources struct {
 	PrefixMesosMasterApiV1 func() string
 	PrefixMesosSlaveApiV0  func(string) string
+	PrefixMesosSlaveApiV1  func(string) string
 }
 
 func NewResources() *Resources {
 	return &Resources{
 		PrefixMesosMasterApiV1: func() string { return "/mesos/api/v1/" },
 		PrefixMesosSlaveApiV0:  func(agentid string) string { return "/agent/" + agentid },
+		PrefixMesosSlaveApiV1:  func(agentid string) string { return "/agent/" + agentid + "/api/v1" },
 	}
 }
 
@@ -49,17 +53,17 @@ func (q *Resources) ReserveResource(agentid string, role string, principal strin
 	return nil
 }
 
-func (q *Resources) UnreserveResource(agentid string, role string, principal string, cpus float64, cpusLabel string, mem float64, memLabel string, disk float64, diskLabel string) error {
+func (q *Resources) UnreserveResource(agentid string, role string, principal string, cpus float64, cpusLabel string, mem float64, memLabel string, disk float64, diskLabel string, frameworkLabel string) error {
 
 	resources := []mesos.Resource{}
 	if cpus > 0 {
-		resources = append(resources, resourceWithLabel("cpus", role, principal, cpus, cpusLabel))
+		resources = append(resources, resourceWithLabel("cpus", role, principal, cpus, cpusLabel, frameworkLabel))
 	}
 	if mem > 0 {
-		resources = append(resources, resourceWithLabel("mem", role, principal, mem, memLabel))
+		resources = append(resources, resourceWithLabel("mem", role, principal, mem, memLabel, frameworkLabel))
 	}
 	if disk > 0 {
-		resources = append(resources, resourceWithLabel("disk", role, principal, disk, diskLabel))
+		resources = append(resources, resourceWithLabel("disk", role, principal, disk, diskLabel, frameworkLabel))
 	}
 
 	body := master.Call{
@@ -86,11 +90,11 @@ func (q *Resources) UnreserveResource(agentid string, role string, principal str
 
 }
 
-func (q *Resources) DestroyVolume(agentid string, role string, principal string, disk float64, resourceid string, persistid string, containerpath string, hostpath string) error {
+func (q *Resources) DestroyVolume(agentid string, role string, principal string, disk float64, resourceid string, frameworkid string, persistid string, containerpath string, hostpath string) error {
 
 	resources := []mesos.Resource{}
 
-	resources = append(resources, resourceDiskWithLabel(role, principal, disk, resourceid, persistid, containerpath, ""))
+	resources = append(resources, resourceDiskWithLabel(role, principal, disk, resourceid, frameworkid, persistid, containerpath, ""))
 
 	request_body := master.Call{
 		Type: master.Call_DESTROY_VOLUMES,
@@ -111,10 +115,10 @@ func (q *Resources) DestroyVolume(agentid string, role string, principal string,
 	return nil
 }
 
-func (q *Resources) UnreserveOneResource(agentid string, role string, principal string, resourceType string, resourceValue float64, resourceLabel string) error {
+func (q *Resources) UnreserveOneResource(agentid string, role string, principal string, resourceType string, resourceValue float64, resourceLabel string, frameworkLabel string) error {
 
 	resources := []mesos.Resource{}
-	resources = append(resources, resourceWithLabel(resourceType, role, principal, resourceValue, resourceLabel))
+	resources = append(resources, resourceWithLabel(resourceType, role, principal, resourceValue, resourceLabel, frameworkLabel))
 
 	body := master.Call{
 		Type: master.Call_UNRESERVE_RESOURCES,
@@ -140,11 +144,11 @@ func (q *Resources) UnreserveOneResource(agentid string, role string, principal 
 
 }
 
-func (q *Resources) UnreserveResourceAll(agentid string, role string) error {
+func (q *Resources) UnreserveResourceAll(agentid string, role string, principal string) error {
 
 	client.PrintMessage("Unreserve all resources for %s", role)
 
-	resources, err := getResourcesOnRole(q.PrefixMesosSlaveApiV0(agentid), role)
+	resources, err := getResourcesOnRole(q.PrefixMesosSlaveApiV0(agentid), role, principal)
 	if err != nil {
 		return err
 	}
@@ -152,9 +156,9 @@ func (q *Resources) UnreserveResourceAll(agentid string, role string) error {
 	// first, trying to destroy persistent volume
 	for _, r := range resources {
 		if r.GetName() == "disk" && r.GetDisk().GetPersistence().GetID() != "" {
-			rid := getResourceIDFromLabels(r.GetReservation().GetLabels().GetLabels())
+			rid, fid := getIDsFromLabels(r.GetReservation().GetLabels().GetLabels())
 			client.PrintMessage("Destroying persistent volumes: %s", rid)
-			err = q.DestroyVolume(agentid, role, r.GetReservation().GetPrincipal(), r.GetScalar().GetValue(), rid, r.GetDisk().GetPersistence().GetID(), r.GetDisk().GetVolume().GetContainerPath(), "")
+			err = q.DestroyVolume(agentid, role, principal, r.GetScalar().GetValue(), rid, fid, r.GetDisk().GetPersistence().GetID(), r.GetDisk().GetVolume().GetContainerPath(), "")
 			if err != nil {
 				return err
 			}
@@ -164,9 +168,9 @@ func (q *Resources) UnreserveResourceAll(agentid string, role string) error {
 	for _, r := range resources {
 		// TODO we should handle ports resource.
 		if r.GetName() != "ports" {
-			rid := getResourceIDFromLabels(r.GetReservation().GetLabels().GetLabels())
+			rid, fid := getIDsFromLabels(r.GetReservation().GetLabels().GetLabels())
 			client.PrintMessage("unreserve resouce: %s", rid)
-			err = q.UnreserveOneResource(agentid, role, r.GetReservation().GetPrincipal(), r.GetName(), r.GetScalar().GetValue(), rid)
+			err = q.UnreserveOneResource(agentid, role, principal, r.GetName(), r.GetScalar().GetValue(), rid, fid)
 			if err != nil {
 				return err
 			}
@@ -201,15 +205,22 @@ func resource(resourceType string, role string, principal string, cpus float64) 
 	}
 }
 
-func resourceWithLabel(resourceType string, role string, principal string, cpus float64, resourceid string) mesos.Resource {
+func resourceWithLabel(resourceType string, role string, principal string, cpus float64, resourceid string, frameworkid string) mesos.Resource {
+	var labels []mesos.Label
+	if frameworkid != "" {
+		labelFrameworkID := mesos.Label{
+			Key:   "framework_id",
+			Value: &frameworkid,
+		}
+		labels = append(labels, labelFrameworkID)
+	}
 
-	label := mesos.Label{
+	labelResourceID := mesos.Label{
 		Key:   "resource_id",
 		Value: &resourceid,
 	}
+	labels = append(labels, labelResourceID)
 
-	labels := []mesos.Label{}
-	labels = append(labels, label)
 	mesosLabels := mesos.Labels{Labels: labels}
 
 	scala := mesos.Value_Type(mesos.SCALAR)
@@ -218,24 +229,44 @@ func resourceWithLabel(resourceType string, role string, principal string, cpus 
 		Labels:    &mesosLabels,
 	}
 
+	var rtype mesos.Resource_ReservationInfo_Type
+	rtype = 2
+
+	dynamicReservation := mesos.Resource_ReservationInfo{
+		Type:      &rtype,
+		Role:      &role,
+		Principal: &principal,
+		Labels:    &mesosLabels,
+	}
+
+	var reservations []mesos.Resource_ReservationInfo
+	reservations = append(reservations, dynamicReservation)
+
 	return mesos.Resource{
-		Type:        &scala,
-		Name:        resourceType,
-		Role:        &role,
-		Reservation: &reservation,
-		Scalar:      &mesos.Value_Scalar{Value: cpus},
+		Type:         &scala,
+		Name:         resourceType,
+		Role:         &role,
+		Reservation:  &reservation,
+		Reservations: reservations,
+		Scalar:       &mesos.Value_Scalar{Value: cpus},
 	}
 }
 
-func resourceDiskWithLabel(role string, principal string, disk float64, resourceid string, persistid string, containerPath string, hostPath string) mesos.Resource {
+func resourceDiskWithLabel(role string, principal string, disk float64, resourceid string, frameworkid string, persistid string, containerPath string, hostPath string) mesos.Resource {
+	var labels []mesos.Label
+	if frameworkid != "" {
+		labelFrameworkID := mesos.Label{
+			Key:   "framework_id",
+			Value: &frameworkid,
+		}
+		labels = append(labels, labelFrameworkID)
+	}
 
-	label := mesos.Label{
+	labelResourceID := mesos.Label{
 		Key:   "resource_id",
 		Value: &resourceid,
 	}
-
-	labels := []mesos.Label{}
-	labels = append(labels, label)
+	labels = append(labels, labelResourceID)
 	mesosLabels := mesos.Labels{Labels: labels}
 
 	scala := mesos.Value_Type(mesos.SCALAR)
@@ -243,6 +274,19 @@ func resourceDiskWithLabel(role string, principal string, disk float64, resource
 		Principal: &principal,
 		Labels:    &mesosLabels,
 	}
+
+	var rtype mesos.Resource_ReservationInfo_Type
+	rtype = 2
+
+	dynamicReservation := mesos.Resource_ReservationInfo{
+		Type:      &rtype,
+		Role:      &role,
+		Principal: &principal,
+		Labels:    &mesosLabels,
+	}
+
+	var reservations []mesos.Resource_ReservationInfo
+	reservations = append(reservations, dynamicReservation)
 
 	persist := mesos.Resource_DiskInfo_Persistence{
 		ID:        persistid,
@@ -263,49 +307,70 @@ func resourceDiskWithLabel(role string, principal string, disk float64, resource
 	}
 
 	return mesos.Resource{
-		Type:        &scala,
-		Name:        "disk",
-		Role:        &role,
-		Reservation: &reservation,
-		Scalar:      &mesos.Value_Scalar{Value: disk},
-		Disk:        &diskinfo,
+		Type:         &scala,
+		Name:         "disk",
+		Role:         &role,
+		Reservation:  &reservation,
+		Reservations: reservations,
+		Scalar:       &mesos.Value_Scalar{Value: disk},
+		Disk:         &diskinfo,
 	}
 }
 
 func (q *Resources) ListResourcesFromNode(agentid string, role string) error {
 
-	resources, err := getResourcesOnRole(q.PrefixMesosSlaveApiV0(agentid), role)
+	resources, err := getResourcesOnRole(q.PrefixMesosSlaveApiV0(agentid), role, "")
 	if err != nil {
 		return err
 	}
 
-	client.PrintMessage("Role\t\tPrincipal\t\tName\t\tValue\t\tID\t\tPersistentID\t\tContainerPath")
+	client.PrintMessage("Role\t\tPrincipal\t\tFrameworkID\t\tType\t\tValue\t\tID\t\tPersistentID\t\tContainerPath")
 	for i := range resources {
 		resource := resources[i]
-		rid := getResourceIDFromLabels(resource.GetReservation().GetLabels().GetLabels())
+		rid, fid := getIDsFromLabels(resource.GetReservation().GetLabels().GetLabels())
 		if resource.GetName() == "disk" {
-			client.PrintMessage("%s\t\t%s\t\t%s\t\t%f\t\t%s\t\t%s\t\t%s", resource.GetRole(), resource.GetReservation().GetPrincipal(), resource.GetName(), resource.GetScalar().GetValue(), rid, resource.GetDisk().GetPersistence().GetID(), resource.GetDisk().GetVolume().GetContainerPath())
+			client.PrintMessage("%s\t\t%s\t\t%s\t\t%s\t\t%f\t\t%s\t\t%s\t\t%s", resource.GetRole(), resource.GetReservation().GetPrincipal(), fid, resource.GetName(), resource.GetScalar().GetValue(), rid, resource.GetDisk().GetPersistence().GetID(), resource.GetDisk().GetVolume().GetContainerPath())
 		} else if resource.GetName() == "ports" {
-			client.PrintMessage("%s\t\t%s\t\t%s\t\t%f\t\t%s", resource.GetRole(), resource.GetReservation().GetPrincipal(), resource.GetName(), resource.GetRanges().GoString(), rid)
+			client.PrintMessage("%s\t\t%s\t\t%s\t\t%s\t\t%f\t\t%s", resource.GetRole(), resource.GetReservation().GetPrincipal(), fid, resource.GetName(), resource.GetRanges().GoString(), rid)
 		} else {
-			client.PrintMessage("%s\t\t%s\t\t%s\t\t%f\t\t%s", resource.GetRole(), resource.GetReservation().GetPrincipal(), resource.GetName(), resource.GetScalar().GetValue(), rid)
+			client.PrintMessage("%s\t\t%s\t\t%s\t\t%s\t\t%f\t\t%s", resource.GetRole(), resource.GetReservation().GetPrincipal(), fid, resource.GetName(), resource.GetScalar().GetValue(), rid)
 		}
 	}
+
+	getResourceOnExecutors(q.PrefixMesosSlaveApiV1(agentid), role)
 
 	return nil
 }
 
-func getResourceIDFromLabels(labels []mesos.Label) string {
+func getIDsFromLabels(labels []mesos.Label) (string, string) {
 	var rid = ""
+	var fid = ""
 	for _, value := range labels {
 		if value.Key == "resource_id" {
 			rid = *value.Value
 		}
+		if value.Key == "framework_id" {
+			fid = *value.Value
+		}
 	}
-	return rid
+	return rid, fid
 }
 
-func getResourcesOnRole(urlPath string, role string) (ResourceRole, error) {
+//func getResourcesOnRole(urlPath string, role string) (ResourceRole, error) {
+//	resourcesFull, err := listResources(urlPath)
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	resources := resourcesFull[role]
+//	if len(resources) == 0 {
+//		return nil, errors.New("no resources are reserved for role")
+//	}
+//
+//	return resources, nil
+//}
+
+func getResourcesOnRole(urlPath string, role string, principal string) (ResourceRole, error) {
 	resourcesFull, err := listResources(urlPath)
 	if err != nil {
 		return nil, err
@@ -316,7 +381,18 @@ func getResourcesOnRole(urlPath string, role string) (ResourceRole, error) {
 		return nil, errors.New("no resources are reserved for role")
 	}
 
-	return resources, nil
+	if principal == "" {
+		return resources, nil
+	}
+
+	var resourcesOfPrinciapl ResourceRole
+	for _, r := range resources {
+		if r.GetReservation().GetPrincipal() == principal {
+			resourcesOfPrinciapl = append(resourcesOfPrinciapl, r)
+		}
+	}
+
+	return resourcesOfPrinciapl, nil
 }
 
 func listResources(urlPath string) (ReservedResourcesFull, error) {
@@ -336,4 +412,53 @@ func listResources(urlPath string) (ReservedResourcesFull, error) {
 	}
 
 	return agentStateReponse.AgentReservedResourcesFull, nil
+}
+
+func getResourceOnExecutors(urlPath string, role string) ([]agent.Response_GetExecutors_Executor, error) {
+	allExec, err := getExecutors(urlPath)
+	if err != nil {
+		return nil, err
+	}
+
+	client.PrintMessage("ExecutorID\t\tRole\t\tPrincipal\t\tFrameworkID\t\tType\t\tValue\t\tID\t\tPersistentID\t\tContainerPath")
+	for _, exec := range allExec {
+		execInfo := exec.GetExecutorInfo()
+		for _, r := range execInfo.GetResources() {
+			if r.GetAllocationInfo().GetRole() == role && len(r.GetReservations()) > 0 {
+				rid, fid := getIDsFromLabels(r.GetReservations()[0].GetLabels().GetLabels())
+				if r.GetName() == "disk" {
+					client.PrintMessage("%s\t\t%s\t\t%s\t\t%s\t\t%s\t\t%f\t\t%s\t\t%s\t\t%s", execInfo.GetExecutorID(), r.GetRole(), r.GetReservations()[0].GetPrincipal(), fid, r.GetName(), r.GetScalar().GetValue(), rid, r.GetDisk().GetPersistence().GetID(), r.GetDisk().GetVolume().GetContainerPath())
+				} else if r.GetName() == "ports" {
+					client.PrintMessage("%s\t\t%s\t\t%s\t\t%s\t\t%s\t\t%f\t\t%s", execInfo.GetExecutorID(), r.GetRole(), r.GetReservations()[0].GetPrincipal(), fid, r.GetName(), r.GetRanges().GoString(), rid)
+				} else {
+					client.PrintMessage("%s\t\t%s\t\t%s\t\t%s\t\t%s\t\t%f\t\t%s", execInfo.GetExecutorID(), r.GetRole(), r.GetReservations()[0].GetPrincipal(), fid, r.GetName(), r.GetScalar().GetValue(), rid)
+				}
+			} else if r.GetAllocationInfo().GetRole() == role && len(r.GetReservations()) <= 0 {
+				client.PrintMessage("%s\t\t%s\t\t%s\t\t%s\t\t%s\t\t%f\t\t", execInfo.GetExecutorID(), r.GetRole(), "", "", r.GetName(), r.GetScalar().GetValue())
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+func getExecutors(urlPath string) ([]agent.Response_GetExecutors_Executor, error) {
+	body := agentcalls.GetExecutors()
+	requestContent, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.HTTPServicePostJSON(urlPath, requestContent)
+	if err != nil {
+		return nil, err
+	}
+
+	executors := agent.Response{}
+	err = json.Unmarshal(resp, &executors)
+	if err != nil {
+		return nil, err
+	}
+
+	return executors.GetExecutors.Executors, nil
 }

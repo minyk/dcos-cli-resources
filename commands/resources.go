@@ -10,6 +10,7 @@ type resourcesHandler struct {
 	agentID       string
 	role          string
 	principal     string
+	frameworkID   string
 	cpus          float64
 	cpuLabel      string
 	mem           float64
@@ -26,15 +27,15 @@ func (cmd *resourcesHandler) handleReserve(a *kingpin.Application, e *kingpin.Pa
 }
 
 func (cmd *resourcesHandler) handleUnreserve(a *kingpin.Application, e *kingpin.ParseElement, c *kingpin.ParseContext) error {
-	return cmd.q.UnreserveResource(cmd.agentID, cmd.role, cmd.principal, cmd.cpus, cmd.cpuLabel, cmd.mem, cmd.memLabel, cmd.disk, cmd.diskLabel)
+	return cmd.q.UnreserveResource(cmd.agentID, cmd.role, cmd.principal, cmd.cpus, cmd.cpuLabel, cmd.mem, cmd.memLabel, cmd.disk, cmd.diskLabel, cmd.frameworkID)
 }
 
 func (cmd *resourcesHandler) handleUnreserveAll(a *kingpin.Application, e *kingpin.ParseElement, c *kingpin.ParseContext) error {
-	return cmd.q.UnreserveResourceAll(cmd.agentID, cmd.role)
+	return cmd.q.UnreserveResourceAll(cmd.agentID, cmd.role, cmd.principal)
 }
 
 func (cmd *resourcesHandler) handleDestroyPersistVolume(a *kingpin.Application, e *kingpin.ParseElement, c *kingpin.ParseContext) error {
-	return cmd.q.DestroyVolume(cmd.agentID, cmd.role, cmd.principal, cmd.disk, cmd.diskLabel, cmd.persistid, cmd.containerpath, cmd.hostpath)
+	return cmd.q.DestroyVolume(cmd.agentID, cmd.role, cmd.principal, cmd.disk, cmd.diskLabel, cmd.frameworkID, cmd.persistid, cmd.containerpath, cmd.hostpath)
 }
 
 func (cmd *resourcesHandler) handleListResources(a *kingpin.Application, e *kingpin.ParseElement, c *kingpin.ParseContext) error {
@@ -68,6 +69,7 @@ func HandleUnreserveResourcesCommands(resources *kingpin.CmdClause, q *queries.R
 	unReserve.Flag("agent-id", "Agent ID to unreserve").Required().StringVar(&cmd.agentID)
 	unReserve.Flag("role", "Role for unreserve").Required().StringVar(&cmd.role)
 	unReserve.Flag("principal", "Principal for unreserve.").Default("my-principal").StringVar(&cmd.principal)
+	unReserve.Flag("framework-id", "Framework ID").Default("").StringVar(&cmd.frameworkID)
 	unReserve.Flag("cpus", "Amount of cpus to unreserve").Default("0").Float64Var(&cmd.cpus)
 	unReserve.Flag("cpus-resource-id", "Resource id for unreserve action.").Default("").StringVar(&cmd.cpuLabel)
 	unReserve.Flag("mem", "Amount of memory to unreserve. The unit is MB.").Default("0").Float64Var(&cmd.mem)
@@ -82,6 +84,7 @@ func HandleUnreserveResourcesAllCommands(resources *kingpin.CmdClause, q *querie
 	unReserve := resources.Action(cmd.handleUnreserveAll)
 	unReserve.Flag("agent-id", "Agent ID to unreserve").Required().StringVar(&cmd.agentID)
 	unReserve.Flag("role", "Role for unreserve").Required().StringVar(&cmd.role)
+	unReserve.Flag("principal", "Principal for unreservce").Required().StringVar(&cmd.principal)
 }
 
 func HandleDestroyPersistVolume(resources *kingpin.CmdClause, q *queries.Resources) {
