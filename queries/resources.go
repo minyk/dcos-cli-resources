@@ -92,11 +92,11 @@ func (q *Resources) UnreserveResource(agentid string, role string, principal str
 
 func (q *Resources) DestroyVolume(agentid string, role string, principal string, disk float64, resourceid string, frameworkid string, persistid string, containerpath string, hostpath string) error {
 
-	resources := []mesos.Resource{}
+	var resources []mesos.Resource
 
 	resources = append(resources, resourceDiskWithLabel(role, principal, disk, resourceid, frameworkid, persistid, containerpath, ""))
 
-	request_body := master.Call{
+	requestBody := master.Call{
 		Type: master.Call_DESTROY_VOLUMES,
 		DestroyVolumes: &master.Call_DestroyVolumes{
 			AgentID: mesos.AgentID{Value: agentid},
@@ -104,12 +104,10 @@ func (q *Resources) DestroyVolume(agentid string, role string, principal string,
 		},
 	}
 
-	requestContent, err := json.Marshal(request_body)
+	requestContent, err := json.Marshal(requestBody)
 	_, err = client.HTTPServicePostJSON(q.PrefixMesosMasterApiV1(), requestContent)
 	if err != nil {
 		return err
-	} else {
-		client.PrintMessage("Persistence Volume is successfully removed.")
 	}
 
 	return nil
@@ -117,7 +115,7 @@ func (q *Resources) DestroyVolume(agentid string, role string, principal string,
 
 func (q *Resources) UnreserveOneResource(agentid string, role string, principal string, resourceType string, resourceValue float64, resourceLabel string, frameworkLabel string) error {
 
-	resources := []mesos.Resource{}
+	var resources []mesos.Resource
 	resources = append(resources, resourceWithLabel(resourceType, role, principal, resourceValue, resourceLabel, frameworkLabel))
 
 	body := master.Call{
@@ -141,7 +139,6 @@ func (q *Resources) UnreserveOneResource(agentid string, role string, principal 
 	}
 
 	return nil
-
 }
 
 func (q *Resources) UnreserveResourceAll(agentid string, role string, principal string) error {
@@ -175,10 +172,45 @@ func (q *Resources) UnreserveResourceAll(agentid string, role string, principal 
 				return err
 			}
 		}
+		if r.GetName() == "ports" {
+			rid, _ := getIDsFromLabels(r.GetReservation().GetLabels().GetLabels())
+			client.PrintMessage("unreserve resouce: %s", rid)
+			err = q.UnreserveMesosResource(agentid, r)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
+}
 
+func (q *Resources) UnreserveMesosResource(agentid string, resource mesos.Resource) error {
+
+	var resources []mesos.Resource
+	resources = append(resources, resource)
+
+	body := master.Call{
+		Type: master.Call_UNRESERVE_RESOURCES,
+		UnreserveResources: &master.Call_UnreserveResources{
+			AgentID:   mesos.AgentID{Value: agentid},
+			Resources: resources,
+		},
+	}
+
+	requestContent, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+
+	_, err = client.HTTPServicePostJSON(q.PrefixMesosMasterApiV1(), requestContent)
+	if err != nil {
+		return err
+	} else {
+		client.PrintMessage("Unreservation is successful.")
+	}
+
+	return nil
 }
 
 func resourceCPU(role string, principal string, cpus float64) mesos.Resource {
