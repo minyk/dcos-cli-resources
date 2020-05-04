@@ -6,7 +6,7 @@ import (
 	"github.com/mesos/mesos-go/api/v1/lib"
 	"github.com/mesos/mesos-go/api/v1/lib/agent"
 	agentcalls "github.com/mesos/mesos-go/api/v1/lib/agent/calls"
-	"github.com/mesos/mesos-go/api/v1/lib/master"
+	mastercalls "github.com/mesos/mesos-go/api/v1/lib/master/calls"
 	"github.com/minyk/dcos-resources/client"
 )
 
@@ -26,17 +26,11 @@ func NewResources() *Resources {
 
 func (q *Resources) ReserveResource(agentid string, role string, principal string, cpus float64, mem float64) error {
 
-	resources := []mesos.Resource{}
+	var resources []mesos.Resource
 	resources = append(resources, resourceCPU(role, principal, cpus))
 	resources = append(resources, resourceMEM(role, principal, mem))
 
-	body := master.Call{
-		Type: master.Call_RESERVE_RESOURCES,
-		ReserveResources: &master.Call_ReserveResources{
-			AgentID:   mesos.AgentID{Value: agentid},
-			Resources: resources,
-		},
-	}
+	body := mastercalls.ReserveResources(mesos.AgentID{Value: agentid}, resources...)
 
 	requestContent, err := json.Marshal(body)
 	if err != nil {
@@ -55,7 +49,7 @@ func (q *Resources) ReserveResource(agentid string, role string, principal strin
 
 func (q *Resources) UnreserveResource(agentid string, role string, principal string, cpus float64, cpusLabel string, mem float64, memLabel string, disk float64, diskLabel string, frameworkLabel string) error {
 
-	resources := []mesos.Resource{}
+	var resources []mesos.Resource
 	if cpus > 0 {
 		resources = append(resources, resourceWithLabel("cpus", role, principal, cpus, cpusLabel, frameworkLabel))
 	}
@@ -66,25 +60,7 @@ func (q *Resources) UnreserveResource(agentid string, role string, principal str
 		resources = append(resources, resourceWithLabel("disk", role, principal, disk, diskLabel, frameworkLabel))
 	}
 
-	body := master.Call{
-		Type: master.Call_UNRESERVE_RESOURCES,
-		UnreserveResources: &master.Call_UnreserveResources{
-			AgentID:   mesos.AgentID{Value: agentid},
-			Resources: resources,
-		},
-	}
-
-	requestContent, err := json.Marshal(body)
-	if err != nil {
-		return err
-	}
-
-	_, err = client.HTTPServicePostJSON(q.PrefixMesosMasterApiV1(), requestContent)
-	if err != nil {
-		return err
-	} else {
-		client.PrintMessage("Unreservation is successful.")
-	}
+	q.UnreserveMesosResource(agentid, resources...)
 
 	return nil
 
@@ -95,47 +71,11 @@ func (q *Resources) DestroyVolume(agentid string, role string, principal string,
 	var resources []mesos.Resource
 
 	resources = append(resources, resourceDiskWithLabel(role, principal, disk, resourceid, frameworkid, persistid, containerpath, ""))
-
-	requestBody := master.Call{
-		Type: master.Call_DESTROY_VOLUMES,
-		DestroyVolumes: &master.Call_DestroyVolumes{
-			AgentID: mesos.AgentID{Value: agentid},
-			Volumes: resources,
-		},
-	}
-
+	requestBody := mastercalls.DestroyVolumes(mesos.AgentID{Value: agentid}, resources...)
 	requestContent, err := json.Marshal(requestBody)
 	_, err = client.HTTPServicePostJSON(q.PrefixMesosMasterApiV1(), requestContent)
 	if err != nil {
 		return err
-	}
-
-	return nil
-}
-
-func (q *Resources) UnreserveOneResource(agentid string, role string, principal string, resourceType string, resourceValue float64, resourceLabel string, frameworkLabel string) error {
-
-	var resources []mesos.Resource
-	resources = append(resources, resourceWithLabel(resourceType, role, principal, resourceValue, resourceLabel, frameworkLabel))
-
-	body := master.Call{
-		Type: master.Call_UNRESERVE_RESOURCES,
-		UnreserveResources: &master.Call_UnreserveResources{
-			AgentID:   mesos.AgentID{Value: agentid},
-			Resources: resources,
-		},
-	}
-
-	requestContent, err := json.Marshal(body)
-	if err != nil {
-		return err
-	}
-
-	_, err = client.HTTPServicePostJSON(q.PrefixMesosMasterApiV1(), requestContent)
-	if err != nil {
-		return err
-	} else {
-		client.PrintMessage("Unreservation is successful.")
 	}
 
 	return nil
@@ -163,41 +103,20 @@ func (q *Resources) UnreserveResourceAll(agentid string, role string, principal 
 	}
 
 	for _, r := range resources {
-		// TODO we should handle ports resource.
-		if r.GetName() != "ports" {
-			rid, fid := getIDsFromLabels(r.GetReservation().GetLabels().GetLabels())
-			client.PrintMessage("unreserve resouce: %s", rid)
-			err = q.UnreserveOneResource(agentid, role, principal, r.GetName(), r.GetScalar().GetValue(), rid, fid)
-			if err != nil {
-				return err
-			}
-		}
-		if r.GetName() == "ports" {
-			rid, _ := getIDsFromLabels(r.GetReservation().GetLabels().GetLabels())
-			client.PrintMessage("unreserve resouce: %s", rid)
-			err = q.UnreserveMesosResource(agentid, r)
-			if err != nil {
-				return err
-			}
+		rid, _ := getIDsFromLabels(r.GetReservation().GetLabels().GetLabels())
+		client.PrintMessage("unreserve resouce: %s", rid)
+		err = q.UnreserveMesosResource(agentid, r)
+		if err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
-func (q *Resources) UnreserveMesosResource(agentid string, resource mesos.Resource) error {
+func (q *Resources) UnreserveMesosResource(agentid string, resources ...mesos.Resource) error {
 
-	var resources []mesos.Resource
-	resources = append(resources, resource)
-
-	body := master.Call{
-		Type: master.Call_UNRESERVE_RESOURCES,
-		UnreserveResources: &master.Call_UnreserveResources{
-			AgentID:   mesos.AgentID{Value: agentid},
-			Resources: resources,
-		},
-	}
-
+	body := mastercalls.UnreserveResources(mesos.AgentID{Value: agentid}, resources...)
 	requestContent, err := json.Marshal(body)
 	if err != nil {
 		return err
@@ -255,17 +174,13 @@ func resourceWithLabel(resourceType string, role string, principal string, cpus 
 
 	mesosLabels := mesos.Labels{Labels: labels}
 
-	scala := mesos.Value_Type(mesos.SCALAR)
 	reservation := mesos.Resource_ReservationInfo{
 		Principal: &principal,
 		Labels:    &mesosLabels,
 	}
 
-	var rtype mesos.Resource_ReservationInfo_Type
-	rtype = 2
-
 	dynamicReservation := mesos.Resource_ReservationInfo{
-		Type:      &rtype,
+		Type:      mesos.Resource_ReservationInfo_DYNAMIC.Enum(),
 		Role:      &role,
 		Principal: &principal,
 		Labels:    &mesosLabels,
@@ -275,7 +190,7 @@ func resourceWithLabel(resourceType string, role string, principal string, cpus 
 	reservations = append(reservations, dynamicReservation)
 
 	return mesos.Resource{
-		Type:         &scala,
+		Type:         mesos.SCALAR.Enum(),
 		Name:         resourceType,
 		Role:         &role,
 		Reservation:  &reservation,
@@ -301,17 +216,13 @@ func resourceDiskWithLabel(role string, principal string, disk float64, resource
 	labels = append(labels, labelResourceID)
 	mesosLabels := mesos.Labels{Labels: labels}
 
-	scala := mesos.Value_Type(mesos.SCALAR)
 	reservation := mesos.Resource_ReservationInfo{
 		Principal: &principal,
 		Labels:    &mesosLabels,
 	}
 
-	var rtype mesos.Resource_ReservationInfo_Type
-	rtype = 2
-
 	dynamicReservation := mesos.Resource_ReservationInfo{
-		Type:      &rtype,
+		Type:      mesos.Resource_ReservationInfo_DYNAMIC.Enum(),
 		Role:      &role,
 		Principal: &principal,
 		Labels:    &mesosLabels,
@@ -325,10 +236,8 @@ func resourceDiskWithLabel(role string, principal string, disk float64, resource
 		Principal: &principal,
 	}
 
-	rw := mesos.RW
-
 	volume := mesos.Volume{
-		Mode:          &rw,
+		Mode:          mesos.RW.Enum(),
 		ContainerPath: containerPath,
 	}
 
@@ -339,7 +248,7 @@ func resourceDiskWithLabel(role string, principal string, disk float64, resource
 	}
 
 	return mesos.Resource{
-		Type:         &scala,
+		Type:         mesos.SCALAR.Enum(),
 		Name:         "disk",
 		Role:         &role,
 		Reservation:  &reservation,
