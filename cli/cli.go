@@ -37,9 +37,11 @@ func GetArguments() []string {
 // all of the standard subcommands of the CLI.
 func HandleDefaultSections(app *kingpin.Application) {
 	resourcesQueries := queries.NewResources()
+	resourceUnreserveQueries := queries.NewUnreserveResources()
 	resourceListQueries := queries.NewResourceList()
 
 	commands.HandleResourcesSection(app, resourcesQueries)
+	commands.HandleUnreserveResourcesSection(app, resourceUnreserveQueries)
 	commands.HandleListResourcesSection(app, resourceListQueries)
 }
 

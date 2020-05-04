@@ -76,3 +76,36 @@ func getResourcesOnRole(urlPath string, role string, principal string) (Resource
 
 	return resourcesOfPrinciapl, nil
 }
+
+func listResources(urlPath string) (ReservedResourcesFull, error) {
+	response, err := client.HTTPServiceGet(urlPath + "/state")
+	if err != nil {
+		return nil, err
+	}
+
+	agentStateReponse := AgentState{}
+	err = json.Unmarshal(response, &agentStateReponse)
+	if err != nil {
+		return nil, err
+	}
+
+	for index := range agentStateReponse.AgentReservedResourcesFull {
+		client.PrintVerbose("index: %s", index)
+	}
+
+	return agentStateReponse.AgentReservedResourcesFull, nil
+}
+
+func getIDsFromLabels(labels []mesos.Label) (string, string) {
+	var rid = ""
+	var fid = ""
+	for _, value := range labels {
+		if value.Key == "resource_id" {
+			rid = *value.Value
+		}
+		if value.Key == "framework_id" {
+			fid = *value.Value
+		}
+	}
+	return rid, fid
+}
