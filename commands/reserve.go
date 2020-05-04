@@ -6,20 +6,13 @@ import (
 )
 
 type reserveResourcesHandler struct {
-	q             *queries.Resources
-	agentID       string
-	role          string
-	principal     string
-	frameworkID   string
-	cpus          float64
-	cpuLabel      string
-	mem           float64
-	memLabel      string
-	disk          float64
-	diskLabel     string
-	persistid     string
-	containerpath string
-	hostpath      string
+	q           *queries.ReserveResources
+	agentID     string
+	role        string
+	principal   string
+	frameworkID string
+	cpus        float64
+	mem         float64
 }
 
 func (cmd *reserveResourcesHandler) handleReserve(a *kingpin.Application, e *kingpin.ParseElement, c *kingpin.ParseContext) error {
@@ -27,12 +20,12 @@ func (cmd *reserveResourcesHandler) handleReserve(a *kingpin.Application, e *kin
 }
 
 // HandleScheduleSection
-func HandleResourcesSection(app *kingpin.Application, q *queries.Resources) {
+func HandleReserveResourcesSection(app *kingpin.Application, q *queries.ReserveResources) {
 	HandleReserveResourcesCommands(app.Command("reserve", "Reserve resources").Alias("reserves"), q)
 }
 
 // HandleScheduleCommand
-func HandleReserveResourcesCommands(resources *kingpin.CmdClause, q *queries.Resources) {
+func HandleReserveResourcesCommands(resources *kingpin.CmdClause, q *queries.ReserveResources) {
 	cmd := &reserveResourcesHandler{q: q}
 	reserve := resources.Action(cmd.handleReserve)
 	reserve.Flag("agent-id", "Agent ID to reserve").Required().StringVar(&cmd.agentID)

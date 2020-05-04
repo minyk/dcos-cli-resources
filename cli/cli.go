@@ -40,7 +40,7 @@ func HandleDefaultSections(app *kingpin.Application) {
 	resourceUnreserveQueries := queries.NewUnreserveResources()
 	resourceListQueries := queries.NewResourceList()
 
-	commands.HandleResourcesSection(app, resourcesQueries)
+	commands.HandleReserveResourcesSection(app, resourcesQueries)
 	commands.HandleUnreserveResourcesSection(app, resourceUnreserveQueries)
 	commands.HandleListResourcesSection(app, resourceListQueries)
 }
