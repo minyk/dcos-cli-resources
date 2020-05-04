@@ -2,10 +2,7 @@ package queries
 
 import (
 	"encoding/json"
-	"errors"
 	"github.com/mesos/mesos-go/api/v1/lib"
-	"github.com/mesos/mesos-go/api/v1/lib/agent"
-	agentcalls "github.com/mesos/mesos-go/api/v1/lib/agent/calls"
 	mastercalls "github.com/mesos/mesos-go/api/v1/lib/master/calls"
 	"github.com/minyk/dcos-resources/client"
 )
@@ -258,31 +255,6 @@ func resourceDiskWithLabel(role string, principal string, disk float64, resource
 	}
 }
 
-func (q *Resources) ListResourcesFromNode(agentid string, role string) error {
-
-	resources, err := getResourcesOnRole(q.PrefixMesosSlaveApiV0(agentid), role, "")
-	if err != nil {
-		return err
-	}
-
-	client.PrintMessage("Role\t\tPrincipal\t\tFrameworkID\t\tType\t\tValue\t\tID\t\tPersistentID\t\tContainerPath")
-	for i := range resources {
-		resource := resources[i]
-		rid, fid := getIDsFromLabels(resource.GetReservation().GetLabels().GetLabels())
-		if resource.GetName() == "disk" {
-			client.PrintMessage("%s\t\t%s\t\t%s\t\t%s\t\t%f\t\t%s\t\t%s\t\t%s", resource.GetRole(), resource.GetReservation().GetPrincipal(), fid, resource.GetName(), resource.GetScalar().GetValue(), rid, resource.GetDisk().GetPersistence().GetID(), resource.GetDisk().GetVolume().GetContainerPath())
-		} else if resource.GetName() == "ports" {
-			client.PrintMessage("%s\t\t%s\t\t%s\t\t%s\t\t%f\t\t%s", resource.GetRole(), resource.GetReservation().GetPrincipal(), fid, resource.GetName(), resource.GetRanges().GoString(), rid)
-		} else {
-			client.PrintMessage("%s\t\t%s\t\t%s\t\t%s\t\t%f\t\t%s", resource.GetRole(), resource.GetReservation().GetPrincipal(), fid, resource.GetName(), resource.GetScalar().GetValue(), rid)
-		}
-	}
-
-	getResourceOnExecutors(q.PrefixMesosSlaveApiV1(agentid), role)
-
-	return nil
-}
-
 func getIDsFromLabels(labels []mesos.Label) (string, string) {
 	var rid = ""
 	var fid = ""
@@ -311,31 +283,6 @@ func getIDsFromLabels(labels []mesos.Label) (string, string) {
 //	return resources, nil
 //}
 
-func getResourcesOnRole(urlPath string, role string, principal string) (ResourceRole, error) {
-	resourcesFull, err := listResources(urlPath)
-	if err != nil {
-		return nil, err
-	}
-
-	resources := resourcesFull[role]
-	if len(resources) == 0 {
-		return nil, errors.New("no resources are reserved for role")
-	}
-
-	if principal == "" {
-		return resources, nil
-	}
-
-	var resourcesOfPrinciapl ResourceRole
-	for _, r := range resources {
-		if r.GetReservation().GetPrincipal() == principal {
-			resourcesOfPrinciapl = append(resourcesOfPrinciapl, r)
-		}
-	}
-
-	return resourcesOfPrinciapl, nil
-}
-
 func listResources(urlPath string) (ReservedResourcesFull, error) {
 	response, err := client.HTTPServiceGet(urlPath + "/state")
 	if err != nil {
@@ -353,53 +300,4 @@ func listResources(urlPath string) (ReservedResourcesFull, error) {
 	}
 
 	return agentStateReponse.AgentReservedResourcesFull, nil
-}
-
-func getResourceOnExecutors(urlPath string, role string) ([]agent.Response_GetExecutors_Executor, error) {
-	allExec, err := getExecutors(urlPath)
-	if err != nil {
-		return nil, err
-	}
-
-	client.PrintMessage("ExecutorID\t\tRole\t\tPrincipal\t\tFrameworkID\t\tType\t\tValue\t\tID\t\tPersistentID\t\tContainerPath")
-	for _, exec := range allExec {
-		execInfo := exec.GetExecutorInfo()
-		for _, r := range execInfo.GetResources() {
-			if r.GetAllocationInfo().GetRole() == role && len(r.GetReservations()) > 0 {
-				rid, fid := getIDsFromLabels(r.GetReservations()[0].GetLabels().GetLabels())
-				if r.GetName() == "disk" {
-					client.PrintMessage("%s\t\t%s\t\t%s\t\t%s\t\t%s\t\t%f\t\t%s\t\t%s\t\t%s", execInfo.GetExecutorID(), r.GetRole(), r.GetReservations()[0].GetPrincipal(), fid, r.GetName(), r.GetScalar().GetValue(), rid, r.GetDisk().GetPersistence().GetID(), r.GetDisk().GetVolume().GetContainerPath())
-				} else if r.GetName() == "ports" {
-					client.PrintMessage("%s\t\t%s\t\t%s\t\t%s\t\t%s\t\t%f\t\t%s", execInfo.GetExecutorID(), r.GetRole(), r.GetReservations()[0].GetPrincipal(), fid, r.GetName(), r.GetRanges().GoString(), rid)
-				} else {
-					client.PrintMessage("%s\t\t%s\t\t%s\t\t%s\t\t%s\t\t%f\t\t%s", execInfo.GetExecutorID(), r.GetRole(), r.GetReservations()[0].GetPrincipal(), fid, r.GetName(), r.GetScalar().GetValue(), rid)
-				}
-			} else if r.GetAllocationInfo().GetRole() == role && len(r.GetReservations()) <= 0 {
-				client.PrintMessage("%s\t\t%s\t\t%s\t\t%s\t\t%s\t\t%f\t\t", execInfo.GetExecutorID(), r.GetRole(), "", "", r.GetName(), r.GetScalar().GetValue())
-			}
-		}
-	}
-
-	return nil, nil
-}
-
-func getExecutors(urlPath string) ([]agent.Response_GetExecutors_Executor, error) {
-	body := agentcalls.GetExecutors()
-	requestContent, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := client.HTTPServicePostJSON(urlPath, requestContent)
-	if err != nil {
-		return nil, err
-	}
-
-	executors := agent.Response{}
-	err = json.Unmarshal(resp, &executors)
-	if err != nil {
-		return nil, err
-	}
-
-	return executors.GetExecutors.Executors, nil
 }
